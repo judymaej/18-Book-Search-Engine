@@ -1,7 +1,11 @@
 import express from 'express';
-import path from 'node:path';
-import db from './config/connection.js';
-import routes from './routes/index.js';
+import { ApolloServer } from 'apollo-server-express';
+import path from 'path';
+import db from '../models';;
+import typeDefs from './schemas/typeDefs';
+import resolvers from './schemas/resolvers';
+import { authMiddleware } from '../services/auth';
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -9,13 +13,25 @@ const PORT = process.env.PORT || 3001;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// if we're in production, serve client/build as static assets
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/build')));
 }
 
-app.use(routes);
+const startServer = async () => {
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    context: authMiddleware,
+  });
 
-db.once('open', () => {
-  app.listen(PORT, () => console.log(`🌍 Now listening on localhost:${PORT}`));
-});
+  await server.start();
+  server.applyMiddleware({ app });
+
+  db.once('open', () => {
+    app.listen(PORT, () => {
+      console.log(`🌍 Server running at http://localhost:${PORT}${server.graphqlPath}`);
+    });
+  });
+};
+
+startServer();
